@@ -45,16 +45,52 @@ export default async function handler(req, res) {
     console.log('Audio URL:', audioUrl);
 
     // Step 1: Download audio file
-    const audioResponse = await fetch(audioUrl);
+    // Auto-append directDownload=true for Zoho WorkDrive URLs
+    let downloadUrl = audioUrl;
+    if (audioUrl.includes('workdrive.zoho')) {
+      if (audioUrl.includes('?')) {
+        downloadUrl = audioUrl + '&directDownload=true';
+      } else {
+        downloadUrl = audioUrl + '?directDownload=true';
+      }
+      console.log('Modified WorkDrive URL for direct download:', downloadUrl);
+    }
+
+    const audioResponse = await fetch(downloadUrl);
     if (!audioResponse.ok) {
-      throw new Error('Failed to download audio file');
+      throw new Error(`Failed to download audio file: ${audioResponse.status} ${audioResponse.statusText}`);
     }
     
     const audioBuffer = await audioResponse.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    const audioFile = new File([audioBlob], 'audio.mp3', { type: 'audio/mpeg' });
+    
+    // Detect file type from URL or default to m4a (common for iPhone Voice Memos)
+    let mimeType = 'audio/mp4';
+    let fileName = 'audio.m4a';
+    
+    if (audioUrl.toLowerCase().includes('.mp3')) {
+      mimeType = 'audio/mpeg';
+      fileName = 'audio.mp3';
+    } else if (audioUrl.toLowerCase().includes('.wav')) {
+      mimeType = 'audio/wav';
+      fileName = 'audio.wav';
+    } else if (audioUrl.toLowerCase().includes('.m4a')) {
+      mimeType = 'audio/mp4';
+      fileName = 'audio.m4a';
+    } else if (audioUrl.toLowerCase().includes('.mp4')) {
+      mimeType = 'audio/mp4';
+      fileName = 'audio.mp4';
+    } else if (audioUrl.toLowerCase().includes('.ogg')) {
+      mimeType = 'audio/ogg';
+      fileName = 'audio.ogg';
+    } else if (audioUrl.toLowerCase().includes('.webm')) {
+      mimeType = 'audio/webm';
+      fileName = 'audio.webm';
+    }
+    
+    const audioBlob = new Blob([audioBuffer], { type: mimeType });
+    const audioFile = new File([audioBlob], fileName, { type: mimeType });
 
-    console.log('Audio file downloaded, size:', audioBuffer.byteLength);
+    console.log('Audio file downloaded, size:', audioBuffer.byteLength, 'type:', mimeType);
 
     // Step 2: Transcribe with Whisper
     console.log('Sending to OpenAI Whisper...');
